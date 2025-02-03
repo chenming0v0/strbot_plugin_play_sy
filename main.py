@@ -17,20 +17,19 @@ class Main(Star):
         super().__init__(context)
         self.PLUGIN_NAME = "strbot_plugin_play_sy"
         
-        # 获取插件目录路径
-        self.plugin_path = os.path.abspath(os.path.dirname(__file__))
+        # 使用插件目录下的数据文件
+        plugin_dir = os.path.dirname(os.path.abspath(__file__))  # 获取当前文件所在目录
+        self.data_file = os.path.join(plugin_dir, "memory_data.json")
+        
+        # 初始化数据存储
+        if not os.path.exists(self.data_file):
+            with open(self.data_file, "w", encoding='utf-8') as f:
+                f.write("{}")
+        with open(self.data_file, "r", encoding='utf-8') as f:
+            self.memories = json.load(f)
         
         # 从配置中获取最大记忆数
         self.max_memories = config.get("max_memories", 10)
-        
-        # 初始化记忆存储 - 使用插件目录路径
-        data_file = os.path.join(self.plugin_path, "memory_data.json")
-        if not os.path.exists(data_file):
-            with open(data_file, "w", encoding='utf-8') as f:
-                json.dump({}, f, ensure_ascii=False, indent=2)
-                
-        with open(data_file, "r", encoding='utf-8') as f:
-            self.memories = json.load(f)
 
     @command_group("memory")
     def memory(self):
@@ -40,7 +39,7 @@ class Main(Star):
     @memory.command("list")
     async def list_memories(self, event: AstrMessageEvent):
         """列出所有记忆"""
-        session_id = event.session_id
+        session_id = self._get_unified_session_id(event)
         if session_id not in self.memories or not self.memories[session_id]:
             return event.plain_result("当前会话没有保存的记忆。")
             
@@ -53,7 +52,7 @@ class Main(Star):
     @memory.command("clear")
     async def clear_memories(self, event: AstrMessageEvent):
         """清空当前会话的所有记忆"""
-        session_id = event.session_id
+        session_id = self._get_unified_session_id(event)
         if session_id in self.memories:
             del self.memories[session_id]
             await self._save_memories()
@@ -63,7 +62,7 @@ class Main(Star):
     @memory.command("remove")
     async def remove_memory(self, event: AstrMessageEvent, index: int):
         """删除指定序号的记忆"""
-        session_id = event.session_id
+        session_id = self._get_unified_session_id(event)
         if session_id not in self.memories:
             return event.plain_result("当前会话没有保存的记忆。")
             
@@ -99,9 +98,14 @@ class Main(Star):
 
     async def _save_memories(self):
         """保存记忆到文件"""
-        data_file = os.path.join(self.plugin_path, "memory_data.json")
-        with open(data_file, "w", encoding='utf-8') as f:
-            json.dump(self.memories, f, ensure_ascii=False, indent=2)
+        with open(self.data_file, "w", encoding='utf-8') as f:
+            json.dump(self.memories, f, ensure_ascii=False)
+
+    def _get_unified_session_id(self, event: AstrMessageEvent) -> str:
+        """获取统一的会话ID格式"""
+        if isinstance(event, Context):
+            return self.context.get_event_queue()._queue[0].session_id
+        return event.unified_msg_origin
 
     @llm_tool(name="save_memory")
     async def save_memory(self, event: AstrMessageEvent, content: str, importance: int = 1):
@@ -111,7 +115,7 @@ class Main(Star):
             content(string): 要保存的记忆内容
             importance(number): 记忆的重要程度，1-5之间
         """
-        session_id = event.session_id
+        session_id = self._get_unified_session_id(event)
         
         if session_id not in self.memories:
             self.memories[session_id] = []
@@ -133,7 +137,7 @@ class Main(Star):
     @llm_tool(name="get_memories")
     async def get_memories(self, event: AstrMessageEvent) -> str:
         """获取当前会话的所有记忆"""
-        session_id = event.session_id
+        session_id = self._get_unified_session_id(event)
         if session_id not in self.memories:
             return "我没有任何相关记忆。"
             
