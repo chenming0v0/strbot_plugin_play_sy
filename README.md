@@ -21,9 +21,9 @@
 
 ### 命令列表
 
-- `/memory_list` - 列出当前会话的所有记忆
-- `/memory_clear` - 清空当前会话的所有记忆
-- `/memory_remove <序号>` - 删除指定序号的记忆
+- `/memory list` - 列出当前会话的所有记忆
+- `/memory clear` - 清空当前会话的所有记忆
+- `/memory remove <序号>` - 删除指定序号的记忆
 - `/mem_help` - 显示帮助信息
   
 ### 使用演示

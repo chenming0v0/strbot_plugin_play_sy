@@ -1,6 +1,6 @@
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register    
-from astrbot.api.event.filter import command, event_message_type
+from astrbot.api.event.filter import command, command_group, event_message_type
 from astrbot.core.star.filter.event_message_type import EventMessageType
 import json
 import os
@@ -28,7 +28,12 @@ class Main(Star):
         with open(f"data/{self.PLUGIN_NAME}_data.json", "r", encoding='utf-8') as f:
             self.memories = json.load(f)
 
-    @command("memory_list")
+    @command_group("memory")
+    def memory(self):
+        """记忆管理指令组"""
+        pass
+
+    @memory.command("list")
     async def list_memories(self, event: AstrMessageEvent):
         """列出所有记忆"""
         session_id = event.session_id
@@ -41,7 +46,7 @@ class Main(Star):
             memory_text += f"{i+1}. {memory['content']} (重要程度:{memory['importance']}, 时间:{memory['timestamp']})\n"
         return event.plain_result(memory_text)
 
-    @command("memory_clear")
+    @memory.command("clear")
     async def clear_memories(self, event: AstrMessageEvent):
         """清空当前会话的所有记忆"""
         session_id = event.session_id
@@ -51,19 +56,15 @@ class Main(Star):
             return event.plain_result("已清空所有记忆。")
         return event.plain_result("当前会话没有保存的记忆。")
 
-    @command("memory_remove")
-    async def remove_memory(self, event: AstrMessageEvent):
+    @memory.command("remove")
+    async def remove_memory(self, event: AstrMessageEvent, index: int):
         """删除指定序号的记忆"""
         session_id = event.session_id
-        try:
-            index = int(event.message_str.split()[-1]) - 1
-        except:
-            return event.plain_result("请指定要删除的记忆序号。")
-            
         if session_id not in self.memories:
             return event.plain_result("当前会话没有保存的记忆。")
             
         memories = self.memories[session_id]
+        index = index - 1  # 用户输入1-based，转换为0-based
         if index < 0 or index >= len(memories):
             return event.plain_result("无效的记忆序号。")
             
@@ -77,9 +78,9 @@ class Main(Star):
         help_text = """记忆插件使用帮助：
         
 1. 记忆管理指令：
-   /memory_list - 列出所有已保存的记忆
-   /memory_clear - 清空当前会话的所有记忆
-   /memory_emove <序号> - 删除指定序号的记忆
+   /memory list - 列出所有已保存的记忆
+   /memory clear - 清空当前会话的所有记忆
+   /memory remove <序号> - 删除指定序号的记忆
    /mem_help - 显示此帮助信息
 
 2. 记忆特性：
@@ -126,9 +127,7 @@ class Main(Star):
 
     @llm_tool(name="get_memories")
     async def get_memories(self, event: AstrMessageEvent) -> str:
-        """
-        获取对话记忆，当遇到不知道的事情时，比如回复用户不知道喜好，可以通过这个工具获取记忆。
-        """
+        """获取当前会话的所有记忆"""
         session_id = event.session_id
         if session_id not in self.memories:
             return "我没有任何相关记忆。"
