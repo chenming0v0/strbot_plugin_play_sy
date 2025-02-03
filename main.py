@@ -17,15 +17,19 @@ class Main(Star):
         super().__init__(context)
         self.PLUGIN_NAME = "strbot_plugin_play_sy"
         
+        # 获取插件目录路径
+        self.plugin_path = os.path.abspath(os.path.dirname(__file__))
+        
         # 从配置中获取最大记忆数
         self.max_memories = config.get("max_memories", 10)
         
-        # 初始化记忆存储
-        if not os.path.exists(f"data/{self.PLUGIN_NAME}_data.json"):
-            with open(f"data/{self.PLUGIN_NAME}_data.json", "w", encoding='utf-8') as f:
+        # 初始化记忆存储 - 使用插件目录路径
+        data_file = os.path.join(self.plugin_path, "memory_data.json")
+        if not os.path.exists(data_file):
+            with open(data_file, "w", encoding='utf-8') as f:
                 json.dump({}, f, ensure_ascii=False, indent=2)
                 
-        with open(f"data/{self.PLUGIN_NAME}_data.json", "r", encoding='utf-8') as f:
+        with open(data_file, "r", encoding='utf-8') as f:
             self.memories = json.load(f)
 
     @command_group("memory")
@@ -95,7 +99,8 @@ class Main(Star):
 
     async def _save_memories(self):
         """保存记忆到文件"""
-        with open(f"data/{self.PLUGIN_NAME}_data.json", "w", encoding='utf-8') as f:
+        data_file = os.path.join(self.plugin_path, "memory_data.json")
+        with open(data_file, "w", encoding='utf-8') as f:
             json.dump(self.memories, f, ensure_ascii=False, indent=2)
 
     @llm_tool(name="save_memory")
