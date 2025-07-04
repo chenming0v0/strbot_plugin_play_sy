@@ -3,6 +3,36 @@
         "description": "每个会话最大记忆数量",
         "type": "int",
         "hint": "超出数量时会删除最不重要的记忆",
-        "default": 10
+        "default": 10,
+        "min": 1,
+        "max": 100
+    },
+    "auto_save_enabled": {
+        "description": "是否启用自动保存记忆",
+        "type": "bool",
+        "hint": "AI会自动保存重要的对话内容",
+        "default": true
+    },
+    "importance_threshold": {
+        "description": "自动保存的重要性阈值",
+        "type": "int",
+        "hint": "只有重要性大于等于此值的记忆才会被自动保存",
+        "default": 3,
+        "min": 1,
+        "max": 5
+    },
+    "memory_expire_days": {
+        "description": "记忆过期天数",
+        "type": "int",
+        "hint": "超过此天数的记忆会被自动清理，0表示永不过期",
+        "default": 30,
+        "min": 0,
+        "max": 365
+    },
+    "enable_memory_management": {
+        "description": "是否启用记忆管理功能",
+        "type": "bool",
+        "hint": "关闭后将禁用所有记忆相关功能",
+        "default": true
     }
 } 
