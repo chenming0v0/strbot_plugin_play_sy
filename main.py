@@ -281,8 +281,12 @@ class Main(Star):
         if self.memory_manager.add_memory(session_id, content, importance, custom_tags):
             await self.memory_manager.save_memories()
             tag_info = f" 标签: {', '.join(custom_tags)}" if custom_tags else ""
+            logger.info(f"[save_memory] 保存记忆成功 - 会话: {session_id}, 重要性: {importance}, 内容: {content[:50]}...")
+            if custom_tags:
+                logger.debug(f"[save_memory] 标签: {', '.join(custom_tags)}")
             return f"✅ 我记住了: {content} (重要性: {importance}/5){tag_info}"
         else:
+            logger.warning(f"[save_memory] 记忆保存失败 - 记忆管理功能已禁用")
             return "❌ 记忆管理功能已禁用，无法保存记忆"
 
     @llm_tool(name="get_memories")
@@ -295,7 +299,11 @@ class Main(Star):
         session_id = self._get_session_id(event)
         memories = self.memory_manager.get_memories_sorted(session_id)
         
+        # 记录日志
+        logger.info(f"[get_memories] 会话ID: {session_id}, 找到 {len(memories)} 条记忆")
+        
         if not memories:
+            logger.info("[get_memories] 没有找到任何记忆")
             return "我没有任何相关记忆。"
         
         # 如果记忆数量较少，直接返回全部
@@ -306,6 +314,9 @@ class Main(Star):
                 # 截断过长的内容，显示前100个字符
                 content = memory['content'][:100] + "..." if len(memory['content']) > 100 else memory['content']
                 memory_text += f"{i+1}. {content} ({importance_stars})\n"
+                # 记录每条记忆到日志
+                logger.debug(f"[get_memories] 记忆{i+1}: {memory['content'][:50]}... (重要性:{memory['importance']})")
+            logger.info(f"[get_memories] 返回全部 {len(memories)} 条记忆")
             return memory_text
         
         # 记忆较多时，分级显示
@@ -315,9 +326,12 @@ class Main(Star):
         five_star = [m for m in memories if m["importance"] == 5]
         if five_star:
             memory_text += f"【重要记忆 ⭐⭐⭐⭐⭐】({len(five_star)}条)：\n"
+            logger.info(f"[get_memories] 找到 {len(five_star)} 条5星记忆，全部返回")
             for i, memory in enumerate(five_star):  # 返回所有5星记忆
                 # 完整显示5星记忆内容，不截断
                 memory_text += f"{i+1}. {memory['content']}\n"
+                # 记录5星记忆到日志
+                logger.debug(f"[get_memories] 5星记忆{i+1}: {memory['content'][:100]}...")
             memory_text += "\n"
         
         # 显示部分4星记忆
@@ -351,18 +365,25 @@ class Main(Star):
         """
         session_id = self._get_session_id(event)
         
+        # 记录搜索请求
+        logger.info(f"[search_memories] 会话ID: {session_id}, 搜索关键词: '{keyword}', show_all: {show_all}")
+        
         # 支持多关键词搜索
         keywords = keyword.split()
         all_matches = []
         
         for kw in keywords:
             matches = self.memory_manager.search_memories(session_id, kw)
+            logger.debug(f"[search_memories] 关键词 '{kw}' 匹配到 {len(matches)} 条记忆")
             for match in matches:
                 # 避免重复添加
                 if not any(m['memory_id'] == match.get('memory_id', match['content']) for m in all_matches):
                     all_matches.append(match)
         
+        logger.info(f"[search_memories] 总共找到 {len(all_matches)} 条匹配的记忆")
+        
         if not all_matches:
+            logger.info(f"[search_memories] 没有找到包含 '{keyword}' 的记忆")
             return f"没有找到包含 '{keyword}' 的记忆。"
         
         # 按重要性排序
@@ -395,9 +416,12 @@ class Main(Star):
             five_star = [m for m in all_matches if m["importance"] == 5]
             if five_star:
                 memory_text += f"【高度相关 ⭐⭐⭐⭐⭐】({len(five_star)}条)：\n"
+                logger.info(f"[search_memories] 找到 {len(five_star)} 条5星匹配记忆，全部返回")
                 for i, memory in enumerate(five_star):  # 返回所有5星记忆
                     # 5星记忆完整显示内容
                     memory_text += f"{i+1}. {memory['content']}\n"
+                    # 记录到日志
+                    logger.debug(f"[search_memories] 5星匹配{i+1}: {memory['content'][:100]}...")
                 memory_text += "\n"
             
             # 4星记忆

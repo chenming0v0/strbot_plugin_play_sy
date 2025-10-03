@@ -78,15 +78,19 @@ class MemoryManager:
     def add_memory(self, session_id: str, content: str, importance: int = 1, tags: List[str] = None) -> bool:
         """添加记忆，支持标签"""
         if not self.config.get("enable_memory_management", True):
+            logger.warning("[MemoryManager] 记忆管理功能已禁用")
             return False
         
         if session_id not in self.memories:
             self.memories[session_id] = []
+            logger.debug(f"[MemoryManager] 为会话 {session_id} 创建新的记忆列表")
         
         max_memories = self.config.get("max_memories", 100)
+        current_count = len(self.memories[session_id])
+        logger.debug(f"[MemoryManager] 当前会话记忆数: {current_count}/{max_memories}")
         
         # 如果记忆数量超限，智能删除
-        if len(self.memories[session_id]) >= max_memories:
+        if current_count >= max_memories:
             # 按重要性和时间综合排序，删除最不重要且最旧的
             self.memories[session_id].sort(key=lambda x: (x["importance"], x["timestamp"]))
             
@@ -94,18 +98,23 @@ class MemoryManager:
             low_importance = [m for m in self.memories[session_id] if m["importance"] <= 3]
             if low_importance:
                 # 删除最旧的低重要性记忆
-                self.memories[session_id].remove(low_importance[0])
+                removed = low_importance[0]
+                self.memories[session_id].remove(removed)
+                logger.info(f"[MemoryManager] 删除低重要性记忆: {removed['content'][:50]}... (重要性:{removed['importance']})")
             else:
                 # 如果都是高重要性记忆，删除最旧的
-                self.memories[session_id].pop(0)
+                removed = self.memories[session_id].pop(0)
+                logger.info(f"[MemoryManager] 删除最旧记忆: {removed['content'][:50]}... (重要性:{removed['importance']})")
         
         # 合并自定义标签和自动提取的标签
         auto_tags = self._extract_tags(content)
         if tags:
             # 用户自定义标签优先，然后添加自动提取的标签（去重）
             all_tags = list(set(tags + auto_tags))
+            logger.debug(f"[MemoryManager] 标签合并 - 自定义: {tags}, 自动: {auto_tags}, 最终: {all_tags}")
         else:
             all_tags = auto_tags
+            logger.debug(f"[MemoryManager] 自动提取标签: {all_tags}")
         
         memory = {
             "content": content,
@@ -116,6 +125,7 @@ class MemoryManager:
         }
         
         self.memories[session_id].append(memory)
+        logger.info(f"[MemoryManager] 成功添加记忆 - ID: {memory['memory_id']}, 重要性: {memory['importance']}, 标签数: {len(all_tags)}")
         return True
     
     def _extract_tags(self, content: str) -> List[str]:
@@ -247,10 +257,13 @@ class MemoryManager:
         """搜索记忆，支持多关键词"""
         memories = self.get_memories(session_id)
         if not keyword:
+            logger.debug(f"[MemoryManager] 搜索关键词为空，返回所有 {len(memories)} 条记忆")
             return memories
         
         # 支持多关键词搜索
         keywords = keyword.lower().split()
+        logger.info(f"[MemoryManager] 搜索记忆 - 会话: {session_id}, 关键词: {keywords}")
+        
         results = []
         
         for memory in memories:
@@ -262,6 +275,7 @@ class MemoryManager:
                 memory_copy = memory.copy()
                 memory_copy['match_score'] = match_count
                 results.append(memory_copy)
+                logger.debug(f"[MemoryManager] 匹配记忆: {memory['content'][:50]}... (匹配度:{match_count}, 重要性:{memory['importance']})")
         
         # 按匹配度和重要性排序
         results.sort(key=lambda x: (x.get('match_score', 0), x["importance"]), reverse=True)
@@ -269,6 +283,13 @@ class MemoryManager:
         # 移除临时的match_score字段
         for result in results:
             result.pop('match_score', None)
+        
+        logger.info(f"[MemoryManager] 搜索完成 - 找到 {len(results)} 条匹配的记忆")
+        
+        # 记录5星记忆数量
+        five_star_count = len([r for r in results if r["importance"] == 5])
+        if five_star_count > 0:
+            logger.info(f"[MemoryManager] 其中包含 {five_star_count} 条5星记忆")
         
         return results
     
