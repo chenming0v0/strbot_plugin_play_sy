@@ -10,7 +10,7 @@ from .config_manager import ConfigManager
 
 logger = logging.getLogger("astrbot")
 
-@register("ai_memory", "kjqwdw", "一个AI记忆管理插件", "1.0.0")
+@register("ai_memory", "chenming0v0", "一个AI记忆管理插件", "2.0.0")
 class Main(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -24,7 +24,7 @@ class Main(Star):
         
         # 初始化配置管理器
         default_config = {
-            "max_memories": config.get("max_memories", 10),
+            "max_memories": config.get("max_memories", 100),
             "auto_save_enabled": config.get("auto_save_enabled", True),
             "importance_threshold": config.get("importance_threshold", 3),
             "memory_expire_days": config.get("memory_expire_days", 30),
@@ -106,8 +106,8 @@ class Main(Star):
         return event.plain_result(stats_text)
 
     @memory.command("add")
-    async def add_memory(self, event: AstrMessageEvent, content: str, importance: int = 3):
-        """手动添加一条记忆"""
+    async def add_memory(self, event: AstrMessageEvent, content: str, importance: int = 3, tags: str = None):
+        """手动添加一条记忆，支持自定义标签"""
         session_id = self._get_session_id(event)
         
         if not content.strip():
@@ -116,10 +116,16 @@ class Main(Star):
         if importance < 1 or importance > 5:
             return event.plain_result("❌ 重要性必须在1-5之间。")
         
-        if self.memory_manager.add_memory(session_id, content.strip(), importance):
+        # 处理自定义标签
+        custom_tags = None
+        if tags:
+            custom_tags = [tag.strip() for tag in tags.split(',')]
+        
+        if self.memory_manager.add_memory(session_id, content.strip(), importance, custom_tags):
             await self.memory_manager.save_memories()
             importance_stars = "⭐" * importance
-            return event.plain_result(f"✅ 已添加记忆: {content}\n重要程度: {importance_stars} ({importance}/5)")
+            tag_info = f"\n标签: {', '.join(custom_tags)}" if custom_tags else ""
+            return event.plain_result(f"✅ 已添加记忆: {content}\n重要程度: {importance_stars} ({importance}/5){tag_info}")
         else:
             return event.plain_result("❌ 记忆管理功能已禁用，无法添加记忆。")
 
@@ -248,12 +254,13 @@ class Main(Star):
         return event.plain_result(help_text)
 
     @llm_tool(name="save_memory")
-    async def save_memory(self, event: AstrMessageEvent, content: str, importance: int = 1):
+    async def save_memory(self, event: AstrMessageEvent, content: str, importance: int = 1, tags: str = None):
         """保存一条记忆
         
         Args:
             content(string): 要保存的记忆内容
             importance(number): 记忆的重要程度，1-5之间
+            tags(string): 可选的自定义标签，多个标签用逗号分隔，如"人物:辰林,事件:战斗"
         """
         # 检查自动保存是否启用
         if not self.memory_manager.config.get("auto_save_enabled", True):
@@ -266,51 +273,150 @@ class Main(Star):
         
         session_id = self._get_session_id(event)
         
-        if self.memory_manager.add_memory(session_id, content, importance):
+        # 处理自定义标签
+        custom_tags = None
+        if tags:
+            custom_tags = [tag.strip() for tag in tags.split(',')]
+        
+        if self.memory_manager.add_memory(session_id, content, importance, custom_tags):
             await self.memory_manager.save_memories()
-            return f"✅ 我记住了: {content} (重要性: {importance}/5)"
+            tag_info = f" 标签: {', '.join(custom_tags)}" if custom_tags else ""
+            return f"✅ 我记住了: {content} (重要性: {importance}/5){tag_info}"
         else:
             return "❌ 记忆管理功能已禁用，无法保存记忆"
 
     @llm_tool(name="get_memories")
-    async def get_memories(self, event: AstrMessageEvent) -> str:
-        """获取当前会话的所有记忆"""
+    async def get_memories(self, event: AstrMessageEvent, limit: int = 0) -> str:
+        """获取当前会话的所有记忆
+        
+        Args:
+            limit(number): 返回记忆的数量限制，0表示返回所有记忆
+        """
         session_id = self._get_session_id(event)
         memories = self.memory_manager.get_memories_sorted(session_id)
         
         if not memories:
             return "我没有任何相关记忆。"
         
-        memory_text = "💭 相关记忆：\n"
-        for i, memory in enumerate(memories[:5]):  # 只显示前5条最重要的记忆
-            importance_stars = "⭐" * memory["importance"]
-            memory_text += f"{i+1}. {memory['content']} ({importance_stars})\n"
+        # 如果记忆数量较少，直接返回全部
+        if len(memories) <= 10:
+            memory_text = f"💭 共有 {len(memories)} 条记忆：\n"
+            for i, memory in enumerate(memories):
+                importance_stars = "⭐" * memory["importance"]
+                # 截断过长的内容，显示前100个字符
+                content = memory['content'][:100] + "..." if len(memory['content']) > 100 else memory['content']
+                memory_text += f"{i+1}. {content} ({importance_stars})\n"
+            return memory_text
         
-        if len(memories) > 5:
-            memory_text += f"\n... 还有 {len(memories) - 5} 条记忆"
+        # 记忆较多时，分级显示
+        memory_text = f"💭 共有 {len(memories)} 条记忆：\n\n"
+        
+        # 显示所有5星记忆（不限制数量，全部返回）
+        five_star = [m for m in memories if m["importance"] == 5]
+        if five_star:
+            memory_text += f"【重要记忆 ⭐⭐⭐⭐⭐】({len(five_star)}条)：\n"
+            for i, memory in enumerate(five_star):  # 返回所有5星记忆
+                # 完整显示5星记忆内容，不截断
+                memory_text += f"{i+1}. {memory['content']}\n"
+            memory_text += "\n"
+        
+        # 显示部分4星记忆
+        four_star = [m for m in memories if m["importance"] == 4]
+        if four_star:
+            memory_text += f"【次要记忆 ⭐⭐⭐⭐】({len(four_star)}条)：\n"
+            for memory in four_star[:5]:
+                content = memory['content'][:60] + "..." if len(memory['content']) > 60 else memory['content']
+                memory_text += f"• {content}\n"
+            if len(four_star) > 5:
+                memory_text += f"... 还有 {len(four_star) - 5} 条4星记忆\n"
+            memory_text += "\n"
+        
+        # 统计其他记忆
+        other_count = len([m for m in memories if m["importance"] < 4])
+        if other_count > 0:
+            memory_text += f"【其他记忆】：还有 {other_count} 条3星及以下记忆\n"
+        
+        if limit > 0 and limit < len(memories):
+            memory_text += f"\n(根据限制只显示了部分记忆，使用更大的limit查看更多)"
         
         return memory_text
 
     @llm_tool(name="search_memories")
-    async def search_memories_tool(self, event: AstrMessageEvent, keyword: str) -> str:
+    async def search_memories_tool(self, event: AstrMessageEvent, keyword: str, show_all: bool = False) -> str:
         """搜索记忆
         
         Args:
-            keyword(string): 搜索关键词
+            keyword(string): 搜索关键词，支持多个关键词用空格分隔
+            show_all(boolean): 是否显示所有匹配结果，默认False只显示摘要
         """
         session_id = self._get_session_id(event)
-        memories = self.memory_manager.search_memories(session_id, keyword)
         
-        if not memories:
+        # 支持多关键词搜索
+        keywords = keyword.split()
+        all_matches = []
+        
+        for kw in keywords:
+            matches = self.memory_manager.search_memories(session_id, kw)
+            for match in matches:
+                # 避免重复添加
+                if not any(m['memory_id'] == match.get('memory_id', match['content']) for m in all_matches):
+                    all_matches.append(match)
+        
+        if not all_matches:
             return f"没有找到包含 '{keyword}' 的记忆。"
         
-        memory_text = f"🔍 搜索 '{keyword}' 的结果：\n"
-        for i, memory in enumerate(memories[:3]):  # 只显示前3条结果
-            importance_stars = "⭐" * memory["importance"]
-            memory_text += f"{i+1}. {memory['content']} ({importance_stars})\n"
+        # 按重要性排序
+        all_matches.sort(key=lambda x: x["importance"], reverse=True)
         
-        if len(memories) > 3:
-            memory_text += f"\n... 还有 {len(memories) - 3} 条相关记忆"
+        memory_text = f"🔍 搜索 '{keyword}' 找到 {len(all_matches)} 条相关记忆：\n\n"
+        
+        if show_all or len(all_matches) <= 10:
+            # 显示所有结果
+            for i, memory in enumerate(all_matches):
+                importance_stars = "⭐" * memory["importance"]
+                # 高亮匹配的关键词
+                content = memory['content']
+                for kw in keywords:
+                    if kw.lower() in content.lower():
+                        # 简单的高亮标记
+                        content = content.replace(kw, f"【{kw}】")
+                        content = content.replace(kw.lower(), f"【{kw.lower()}】")
+                        content = content.replace(kw.upper(), f"【{kw.upper()}】")
+                
+                # 5星记忆完整显示，其他记忆可以截断
+                if memory["importance"] < 5 and len(content) > 150:
+                    content = content[:150] + "..."
+                
+                memory_text += f"{i+1}. {content}\n"
+                memory_text += f"   {importance_stars} | {memory['timestamp']}\n\n"
+        else:
+            # 分组显示
+            # 5星记忆 - 全部完整返回，不限制数量
+            five_star = [m for m in all_matches if m["importance"] == 5]
+            if five_star:
+                memory_text += f"【高度相关 ⭐⭐⭐⭐⭐】({len(five_star)}条)：\n"
+                for i, memory in enumerate(five_star):  # 返回所有5星记忆
+                    # 5星记忆完整显示内容
+                    memory_text += f"{i+1}. {memory['content']}\n"
+                memory_text += "\n"
+            
+            # 4星记忆
+            four_star = [m for m in all_matches if m["importance"] == 4]
+            if four_star:
+                memory_text += f"【中度相关 ⭐⭐⭐⭐】({len(four_star)}条)：\n"
+                for memory in four_star[:5]:
+                    content = memory['content'][:80] + "..." if len(memory['content']) > 80 else memory['content']
+                    memory_text += f"• {content}\n"
+                if len(four_star) > 5:
+                    memory_text += f"... 还有 {len(four_star) - 5} 条中度相关记忆\n"
+                memory_text += "\n"
+            
+            # 其他
+            other = [m for m in all_matches if m["importance"] < 4]
+            if other:
+                memory_text += f"【其他相关】：还有 {len(other)} 条相关度较低的记忆\n"
+            
+            memory_text += "\n💡 提示：使用 show_all=true 参数查看所有详细结果"
         
         return memory_text
 

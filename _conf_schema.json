@@ -3,9 +3,9 @@
         "description": "每个会话最大记忆数量",
         "type": "int",
         "hint": "超出数量时会删除最不重要的记忆",
-        "default": 10,
-        "min": 1,
-        "max": 100
+        "default": 100,
+        "min": 10,
+        "max": 500
     },
     "auto_save_enabled": {
         "description": "是否启用自动保存记忆",

@@ -1,6 +1,6 @@
 name: ai_memory # 这是你的插件的唯一识别名。
-desc: 一个AI记忆管理插件，可以让ai记住重要的事，记忆读取是ai自己调用的，有时候呆呆的ai不会自己调用，可以多问几次或者人格加上特定提示词 # 插件简短描述
-help: 输入 /mem_help 查看记忆管理帮助。 # 插件的帮助信息
-version: v1.0.0 # 插件版本号。格式：v1.1.1 或者 v1.1
-author: kjqwdw # 作者
-repo: https://github.com/kjqwer/strbot_plugin_play_sy # 插件的仓库地址
+desc: 强大的AI记忆管理插件，支持大容量存储(100+条)、多关键词搜索、智能标签分类、记忆分级显示，解决了记忆丢失问题 # 插件简短描述
+help: 输入 /mem_help 查看记忆管理帮助。支持多关键词搜索和智能标签！ # 插件的帮助信息
+version: v2.0.0 # 插件版本号。格式：v1.1.1 或者 v1.1
+author: chengming0v0二改原作者是kjqwdw # 作者
+repo: https://github.com/chenming0v0/strbot_plugin_play_sy # 插件的仓库地址
